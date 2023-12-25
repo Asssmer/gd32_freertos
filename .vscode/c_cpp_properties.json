@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${default}",
+                "C:\\Keil_v5\\Packs\\ARM/**",
+                "C:\\Keil_v5\\Packs\\GigaDevice\\GD32F4xx_DFP\\3.0.3\\Device\\F4XX/**",
+                "C:\\Keil_v5\\Packs\\ARM\\CMSIS-FreeRTOS\\10.5.1\\Source\\include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__CC_ARM"
+            ],
+            "windowsSdkVersion": "10.0.22000.0",
+            "compilerPath": "cl.exe",
+            "cStandard": "c17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}
+
