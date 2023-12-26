@@ -1,4 +1,4 @@
-./objects/main.o: main.c \
+./objects/main.o: main.c 454software\454software.h \
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\FreeRTOS.h \
   C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stddef.h \
   C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdint.h \
@@ -50,5 +50,4 @@
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\mpu_wrappers.h \
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\task.h \
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\list.h \
-  454software\454software.h \
   C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdio.h

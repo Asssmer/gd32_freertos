@@ -58,7 +58,7 @@
 //  <i> Default: 8192
 #define configTOTAL_HEAP_SIZE                   ((size_t)8192)
 
-//  <o>Kernel tick frequency [Hz] <0-0xFFFFFFFF>
+//!  <o>Kernel tick frequency [Hz] <0-0xFFFFFFFF>
 //  <i> Kernel tick rate in Hz.
 //  <i> Default: 1000
 #define configTICK_RATE_HZ                      ((TickType_t)1000)

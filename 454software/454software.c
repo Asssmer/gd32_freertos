@@ -1,5 +1,8 @@
 #include "./454software.h"
 
+//-----------------------------------------------------------------------
+//                       全局变量
+//-----------------------------------------------------------------------
 char strOutput_454[MAX_STR_SIZE]; // 存储转换后的字符串
 char usart0_res[12];
 int usart0_res_length = 0;
@@ -9,7 +12,6 @@ volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
 //                       全局数据
 //-----------------------------------------------------------------------
 volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
-
 volatile MotorStatus motor_status;
 volatile SensorData sensor_data;
 volatile pwm_capture_data_t pwm_values = {0};
@@ -823,7 +825,6 @@ void LED3(FlagStatus state)
 void usart_echo(uint32_t usart_periph)
 {
     uint8_t data;
-
     while (1)
     {
         // 检查指定的 USART 是否接收到数据
@@ -1393,6 +1394,91 @@ void motor_control(uint16_t speed)
         usart_data_transmit(USART2, frame[i]);
     }
 }
+void motor_speed_percent(uint8_t percent)
+{
+    uint16_t speed = percent * 8000 / 100;
+    uint8_t frame[4];
+    uint8_t check_sum;
+
+    frame[0] = 0x80;                // 帧头
+    frame[1] = speed & 0xFF;        // 转速指令低8位
+    frame[2] = (speed >> 8) & 0xFF; // 转速指令高8位
+
+    // 计算校验和
+    check_sum = frame[1] + frame[2]; // 累加和低8位
+    frame[3] = check_sum;            // 校验
+
+    // 通过 USART 发送数据
+    for (int i = 0; i < sizeof(frame); ++i)
+    {
+        while (usart_flag_get(USART2, USART_FLAG_TBE) == RESET)
+            ;
+        usart_data_transmit(USART2, frame[i]);
+    }
+}
+//-----------------------------------------------------------------------
+//                       测试日志
+//-----------------------------------------------------------------------
+void motor_pressure_flow(int min_speed, int max_speed)
+{
+    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100 )
+    {
+        printf("Error: Speed values must be between 0 and 100 and min_speed should be less than or equal to max_speed.\n");
+        return;
+    }
+    int i, j;
+    // 温度
+    float temperature_P7;
+    float temperature_P9;
+    // 压力
+    float pressure_P10;
+    float pressure_P11;
+    float pressure_P12;
+    // 流量
+    float flow_P13;
+    float flow_P14;
+    float flow_P15;
+    TickType_t startTicks, endTicks, durationTicks;
+    TickType_t currentTicks = xTaskGetTickCount();
+
+    printf("motor_speed_percent,motor_speed,motor_temp,temperature_P7,temperature_P9,pressure_P10,pressure_P11,pressure_P12,flow_P13,flow_P14,flow_P15,diff_time\n");
+
+    for (i = min_speed; i <= max_speed; i++)
+    {
+        startTicks = xTaskGetTickCount();
+        motor_speed_percent(i);
+
+        for (j = 0; j < 20; j++)
+        {
+
+            temperature_P7 = P7_get();
+            temperature_P9 = P9_get();
+            pressure_P10 = P10_get();
+            pressure_P11 = P11_get();
+            pressure_P12 = P12_get();
+            flow_P13 = P13_get();
+            flow_P14 = P14_get();
+            flow_P15 = P15_get();
+            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+                   i,
+                   motor_status.current_speed,
+                   motor_status.motor_temperature,
+                   temperature_P7,
+                   temperature_P9,
+                   pressure_P10,
+                   pressure_P11,
+                   pressure_P12,
+                   flow_P13,
+                   flow_P14,
+                   flow_P15);
+            endTicks = xTaskGetTickCount();
+            durationTicks = endTicks - startTicks;
+            printf(",%u\n", durationTicks);
+        }
+    }
+    motor_speed_percent(0);
+}
+
 //-----------------------------------------------------------------------
 //
 //
