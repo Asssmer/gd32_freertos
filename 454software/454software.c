@@ -1421,7 +1421,7 @@ void motor_speed_percent(uint8_t percent)
 //-----------------------------------------------------------------------
 void motor_pressure_flow(int min_speed, int max_speed)
 {
-    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100 )
+    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100)
     {
         printf("Error: Speed values must be between 0 and 100 and min_speed should be less than or equal to max_speed.\n");
         return;
@@ -1459,7 +1459,9 @@ void motor_pressure_flow(int min_speed, int max_speed)
             flow_P13 = P13_get();
             flow_P14 = P14_get();
             flow_P15 = P15_get();
-            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+            endTicks = xTaskGetTickCount();
+            durationTicks = endTicks - startTicks;
+            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u\n",
                    i,
                    motor_status.current_speed,
                    motor_status.motor_temperature,
@@ -1470,10 +1472,8 @@ void motor_pressure_flow(int min_speed, int max_speed)
                    pressure_P12,
                    flow_P13,
                    flow_P14,
-                   flow_P15);
-            endTicks = xTaskGetTickCount();
-            durationTicks = endTicks - startTicks;
-            printf(",%u\n", durationTicks);
+                   flow_P15, 
+                   durationTicks);
         }
     }
     motor_speed_percent(0);
