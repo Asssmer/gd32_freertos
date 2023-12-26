@@ -1,28 +1,40 @@
-
 #include "./454software/454software.h"
-
-// 任务函数原型
-void Task1(void *pvParameters);
-void Task2(void *pvParameters);
-
+//-----------------------------------------------------------------------
+//                       底层驱动信息
+//-----------------------------------------------------------------------
 // 电机
 extern volatile MotorStatus motor_status;
 // ADC
-extern volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
 extern volatile SensorData sensor_data;
-extern char usart0_res[12];
 // 温度
-float temperature_P7;
-float temperature_P9;
+float temperature_P7; // P7_get();
+float temperature_P9; // P9_get();
 // 压力
-float pressure_P10;
-float pressure_P11;
-float pressure_P12;
+float pressure_P10; // P10_get();
+float pressure_P11; // P11_get();
+float pressure_P12; // P12_get();
 // 流量
 float flow_P13;
 float flow_P14;
 float flow_P15;
-
+// LED控制
+//   LED1(ON),LED1(OFF)
+//   LED2(ON),LED2(OFF)
+//   LED3(ON),LED3(OFF)
+//  电磁阀控制
+//   P4_PWM_set(0);
+//   P5_PWM_set(0);
+//   P6_PWM_set(0);
+// 压电阀片控制
+//   YDP_control(ON),YDP_control(OFF)
+//-----------------------------------------------------------------------
+//                       任务函数原型
+//-----------------------------------------------------------------------
+void Task1(void *pvParameters);
+void Task2(void *pvParameters);
+//-----------------------------------------------------------------------
+//                       主函数
+//-----------------------------------------------------------------------
 int main()
 {
     init_454();
@@ -40,10 +52,12 @@ int main()
         ;
     return 0;
 }
-
-// 任务实现
+//-----------------------------------------------------------------------
+//                       任务实现
+//-----------------------------------------------------------------------
 void Task2(void *pvParameters)
 {
+    
 }
 
 void Task1(void *pvParameters)
@@ -54,7 +68,6 @@ void Task1(void *pvParameters)
     // gpio_bit_toggle(GPIOG, GPIO_PIN_6);
     // delay_ms_454(1000);
 }
-
 //-----------------------------------------------------------------------
 //                       HOOK
 //-----------------------------------------------------------------------

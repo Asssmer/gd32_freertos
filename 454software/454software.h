@@ -104,7 +104,10 @@ void delay_s_454(uint32_t seconds);
 char *intToStr(int num);
 char *floatToStr(float num, int afterpoint);
 void usart_echo(uint32_t usart_periph);
-
+//LED
+void LED1(FlagStatus state);
+void LED2(FlagStatus state);
+void LED3(FlagStatus state);
 // USART
 // I2C
 uint8_t ZXP_Initial(uint32_t i2c_periph);
