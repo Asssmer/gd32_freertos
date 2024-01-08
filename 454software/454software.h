@@ -87,6 +87,7 @@ void RCU_init_454(void);
 void NVIC_init_454(void);
 void LED_init_454(void);
 void YDP_init_454(void);
+void Pulverizer_init_454(void);
 void TIMER_init_454(void);
 void USART0_init_454(void);
 void USART1_init_454(void);
@@ -157,6 +158,8 @@ void P5_PWM_set(uint32_t pulse);
 void P6_PWM_set(uint32_t pulse);
 // 压电阀片
 void YDP_control(FlagStatus on);
+//雾化器控制
+void Pulverizer_control(FlagStatus on);
 
 // 电机
 void motor_control(uint16_t speed);

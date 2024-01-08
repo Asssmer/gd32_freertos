@@ -15,6 +15,7 @@
     },
     "peacock.color": "#094196",
     "files.associations": {
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "gd32f4xx.h": "c"
     }
 }

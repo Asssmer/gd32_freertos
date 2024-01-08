@@ -25,6 +25,7 @@ void init_454(void)
     I2C_init_454();
     LED_init_454();
     YDP_init_454();
+    Pulverizer_init_454();
     TIMER_init_454();
     USART0_init_454();
     USART2_init_454();
@@ -111,6 +112,14 @@ void YDP_init_454(void)
     gpio_output_options_set(GPIOB, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_14);
     // 初始化时可以选择关闭压电阀片
     gpio_bit_reset(GPIOB, GPIO_PIN_14);
+}
+void Pulverizer_init_454(void)
+{
+    // 设置PB14为输出模式
+    gpio_mode_set(GPIOG, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO_PIN_4);
+    gpio_output_options_set(GPIOG, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_4);
+    // 初始化时可以选择关闭压电阀片
+    gpio_bit_reset(GPIOG, GPIO_PIN_4);
 }
 void TIMER_init_454(void)
 {
@@ -1345,15 +1354,15 @@ int16_t MAX31865_TempGet_454(uint32_t cs_pin)
 //-----------------------------------------------------------------------
 void P4_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, pulse);
+    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, pulse*10);
 }
 void P5_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, pulse);
+    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, pulse*10);
 }
 void P6_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, pulse);
+    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, pulse*10);
 }
 //-----------------------------------------------------------------------
 //                       压电阀片
@@ -1370,6 +1379,23 @@ void YDP_control(FlagStatus on)
     }
     delay_ms_454(2);
 }
+
+//-----------------------------------------------------------------------
+//                       雾化器
+//-----------------------------------------------------------------------
+void Pulverizer_control(FlagStatus on)
+{
+    if (on)
+    {
+        gpio_bit_set(GPIOG, GPIO_PIN_4); // 打开压电阀片
+    }
+    else
+    {
+        gpio_bit_reset(GPIOG, GPIO_PIN_4); // 关闭压电阀片
+    }
+    delay_ms_454(2);
+}
+
 //-----------------------------------------------------------------------
 //                       电机
 //-----------------------------------------------------------------------
@@ -1475,6 +1501,7 @@ void motor_pressure_flow(int min_speed, int max_speed)
                    flow_P15, 
                    durationTicks);
         }
+                   delay_s_454(10);
     }
     motor_speed_percent(0);
 }
@@ -1615,10 +1642,13 @@ void USART0_IRQHandler(void)
         }
         else
         {
-            printf("in\n");
             // 成功解析数字
-            int motor_speed = atoi(usart0_res); // 将解析结果保存在变量中
-            motor_control(motor_speed);
+
+            // int motor_speed = atoi(usart0_res); // 将解析结果保存在变量中
+            // motor_control(motor_speed);
+
+            uint8_t motor_speed = atoi(usart0_res); // 将解析结果保存在变量中
+            motor_speed_percent(motor_speed);
             printf("Set motor speed: %hu\n", motor_speed);
             usart0_res_length = 0; // 重置缓冲区
             memset(usart0_res, 0, 12);
