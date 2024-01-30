@@ -16,6 +16,11 @@
     "peacock.color": "#094196",
     "files.associations": {
         "freertos.h": "c",
-        "gd32f4xx.h": "c"
+        "gd32f4xx.h": "c",
+        "stdio.h": "c",
+        "stdint.h": "c",
+        "stdbool.h": "c",
+        "454software.h": "c",
+        "sdcard.h": "c"
     }
 }

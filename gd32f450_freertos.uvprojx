@@ -403,6 +403,16 @@
               <FileType>5</FileType>
               <FilePath>.\454software\454software.h</FilePath>
             </File>
+            <File>
+              <FileName>sdcard.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\454software\sdcard.c</FilePath>
+            </File>
+            <File>
+              <FileName>sdcard.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>.\454software\sdcard.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -1,4 +1,5 @@
 #include "./454software.h"
+#include "./sdcard.h"
 
 //-----------------------------------------------------------------------
 //                       全局变量
@@ -8,6 +9,19 @@ char usart0_res[12];
 int usart0_res_length = 0;
 volatile uint8_t MOTOR_received_frame[MOTOR_FRAME_SIZE];
 volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
+int16_t temperature_P7;
+int16_t temperature_P9;
+// 压力
+int16_t pressure_P10;
+int16_t pressure_P11;
+int16_t pressure_P12;
+// 流量
+uint16_t flow_P13;
+uint16_t flow_P14;
+uint16_t flow_P15;
+
+float oxygen_voltage_air = 1.0; //! 1.0是天工大实验室的数据,项目最后需要使用FMC将校准数据存放到flash中
+
 //-----------------------------------------------------------------------
 //                       全局数据
 //-----------------------------------------------------------------------
@@ -15,6 +29,11 @@ volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
 volatile MotorStatus motor_status;
 volatile SensorData sensor_data;
 volatile pwm_capture_data_t pwm_values = {0};
+SemaphoreHandle_t RtSample_Mutex;
+SemaphoreHandle_t iicCollect_Ready_Semaphore;
+SemaphoreHandle_t iicCollect_Start_Semaphore;
+//! 余辉教授文档需求
+volatile struct struRtSample RtSample;
 //-----------------------------------------------------------------------
 //                       初始化
 //-----------------------------------------------------------------------
@@ -37,6 +56,7 @@ void init_454(void)
     PWM_IN_init_454();
     ADC2_DMA_init_454();
     ADC2_init_454();
+    SDIO_init_454();
 
     delay_ms_454(2); //?初始化后的延时待定
 
@@ -84,6 +104,7 @@ void NVIC_init_454(void)
     // nvic_irq_enable(TIMER4_IRQn, 0, 4);         // PWM_IN
     nvic_irq_enable(DMA0_Channel1_IRQn, 0, 10); // USART2_RX
     nvic_irq_enable(DMA1_Channel0_IRQn, 0, 9);  // ADC2
+    // nvic_irq_enable(DMA1_Channel0_IRQn, 0, 9);  // ADC2
 
     nvic_irq_enable(USART0_IRQn, 0, 8); // USART0_RX
     // nvic_irq_enable(I2C0_EV_IRQn, 0, 3);
@@ -177,8 +198,24 @@ void USART0_init_454(void)
     usart_hardware_flow_cts_config(USART0, USART_CTS_DISABLE);
     usart_receive_config(USART0, USART_RECEIVE_ENABLE);
     usart_transmit_config(USART0, USART_TRANSMIT_ENABLE);
-
     usart_interrupt_enable(USART0, USART_INT_RBNE);
+
+    usart_dma_transmit_config(USART0, USART_DENT_ENABLE);
+
+    /* Configure USART0_TX DMA */
+    dma_deinit(DMA1, DMA_CH7);
+    dma_multi_data_parameter_struct dma_init_struct;
+    dma_multi_data_para_struct_init(&dma_init_struct);
+    dma_init_struct.periph_addr = (uint32_t)&USART_DATA(USART0);
+    dma_init_struct.periph_width = DMA_PERIPH_WIDTH_8BIT;
+    dma_init_struct.periph_inc = DMA_PERIPH_INCREASE_DISABLE;
+    dma_init_struct.memory_width = DMA_MEMORY_WIDTH_8BIT;
+    dma_init_struct.memory_inc = DMA_MEMORY_INCREASE_ENABLE;
+    dma_init_struct.direction = DMA_MEMORY_TO_PERIPH;
+    dma_init_struct.priority = DMA_PRIORITY_LOW;
+    dma_multi_data_mode_init(DMA1, DMA_CH7, &dma_init_struct);
+    dma_channel_subperipheral_select(DMA1, DMA_CH7, DMA_SUBPERI4);
+    dma_interrupt_enable(DMA1, DMA_CH7, DMA_CHXCTL_FTFIE);
 
     // Configure USART0_TX (PA9) as alternate function push-pull
     gpio_af_set(GPIOA, GPIO_AF_7, GPIO_PIN_9);
@@ -517,7 +554,7 @@ void PWM_init_454(void)
 
     timer_channel_output_config(TIMER2, TIMER_CH_0, &timer2_ocinitpara);
     // 设置PWM模式
-    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, 500); // 根据需要调整占空比
+    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, 0); // 根据需要调整占空比
     timer_channel_output_mode_config(TIMER2, TIMER_CH_0, TIMER_OC_MODE_PWM0);
     timer_channel_output_shadow_config(TIMER2, TIMER_CH_0, TIMER_OC_SHADOW_DISABLE);
     // 启动TIMER2
@@ -557,7 +594,7 @@ void PWM_init_454(void)
 
     timer_channel_output_config(TIMER12, TIMER_CH_0, &timer12_ocinitpara);
     // 设置PWM模式
-    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, 499); // 根据需要调整占空比
+    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, 0); // 根据需要调整占空比
     timer_channel_output_mode_config(TIMER12, TIMER_CH_0, TIMER_OC_MODE_PWM0);
     timer_channel_output_shadow_config(TIMER12, TIMER_CH_0, TIMER_OC_SHADOW_DISABLE);
     // 启动TIMER2
@@ -597,7 +634,7 @@ void PWM_init_454(void)
 
     timer_channel_output_config(TIMER3, TIMER_CH_0, &timer3_ocinitpara);
     // 设置PWM模式
-    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, 499); // 根据需要调整占空比
+    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, 0); // 根据需要调整占空比
     timer_channel_output_mode_config(TIMER3, TIMER_CH_0, TIMER_OC_MODE_PWM0);
     timer_channel_output_shadow_config(TIMER3, TIMER_CH_0, TIMER_OC_SHADOW_DISABLE);
     // 启动TIMER3
@@ -644,8 +681,29 @@ void PWM_IN_init_454(void)
     timer_input_capture_config(TIMER4, TIMER_CH_0, &timer4_icinitpara);
 
     timer_interrupt_enable(TIMER4, TIMER_INT_CH0);
-    // 启用TIMER4
-    timer_enable(TIMER4);
+    // !未启用TIMER4,因为需求被砍掉
+    // timer_enable(TIMER4);
+}
+void SDIO_init_454(void)
+{
+    /* configure SDIO_DAT0(PC8), SDIO_DAT3(PC11), SDIO_CLK(PC12) */
+    gpio_af_set(GPIOC, GPIO_AF_12, GPIO_PIN_8 | GPIO_PIN_11 | GPIO_PIN_12);
+
+    gpio_mode_set(GPIOC, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_8 | GPIO_PIN_11);
+    gpio_output_options_set(GPIOC, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_8 | GPIO_PIN_11);
+
+    gpio_mode_set(GPIOC, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO_PIN_12);
+    gpio_output_options_set(GPIOC, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_12);
+
+    /* configure SDIO_DAT1(PB0), SDIO_DAT2(PB1) */
+    gpio_af_set(GPIOB, GPIO_AF_12, GPIO_PIN_0 | GPIO_PIN_1);
+    gpio_mode_set(GPIOB, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_0 | GPIO_PIN_1);
+    gpio_output_options_set(GPIOB, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_0 | GPIO_PIN_1);
+
+    /* configure SDIO_CMD(PD2) */
+    gpio_af_set(GPIOD, GPIO_AF_12, GPIO_PIN_2);
+    gpio_mode_set(GPIOD, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_2);
+    gpio_output_options_set(GPIOD, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_2);
 }
 
 //-----------------------------------------------------------------------
@@ -849,29 +907,42 @@ void usart_echo(uint32_t usart_periph)
         }
     }
 }
+uint8_t usart0_send_454(uint8_t *string, uint16_t count_size)
+{
+    while (DMA_CHCTL(DMA1, DMA_CH7) & DMA_CHXCTL_CHEN)
+    {
+    }
+    while (RESET == usart_flag_get(USART0, USART_FLAG_TC))
+    {
+    }
+    dma_memory_address_config(DMA1, DMA_CH7, DMA_MEMORY_0, string);
+    dma_transfer_number_config(DMA1, DMA_CH7, count_size);
+    dma_channel_enable(DMA1, DMA_CH7);
+    return 0;
+}
 //-----------------------------------------------------------------------
-//                       压力
+//                       压力 (返回值是int16_t,是真实值的0.1倍,例如返回10 000,那么就是100 000pa)
 //-----------------------------------------------------------------------
-float P10_get(void)
+int16_t P10_get(void)
 {
     float i2c0_fTemp = 0;
     float i2c0_fPress = 0;
     ZXP8_get_data_454(I2C0, &i2c0_fTemp, &i2c0_fPress);
-    return i2c0_fPress;
+    return (int16_t)(i2c0_fPress / 10);
 }
-float P11_get(void)
+int16_t P11_get(void)
 {
     float i2c2_fTemp = 0;
     float i2c2_fPress = 0;
     ZXP2_get_data_454(I2C2, &i2c2_fTemp, &i2c2_fPress);
-    return i2c2_fPress;
+    return (int16_t)(i2c2_fPress / 10);
 }
-float P12_get(void)
+int16_t P12_get(void)
 {
     float i2c1_fTemp = 0;
     float i2c1_fPress = 0;
     ZXP8_get_data_454(I2C1, &i2c1_fTemp, &i2c1_fPress);
-    return i2c1_fPress;
+    return (int16_t)(i2c1_fPress / 10);
 }
 
 uint32_t i2c_flag_check_timeout(uint32_t i2c_periph, i2c_flag_enum flag, FlagStatus expected_Status)
@@ -1198,38 +1269,36 @@ void ZXP2_get_data_454(uint32_t i2c_periph, float *fTemp, float *fPress)
     ZXP2_Caculate(press, temp, fPress, fTemp);
 }
 //-----------------------------------------------------------------------
-//                       流量
+//                       流量 (返回值是uint16_t,是真实值的100倍,例如返回20000,那么就是200L/M)
 //-----------------------------------------------------------------------
-float P13_get(void)
+uint16_t P13_get(void)
 {
-    float i2c1_flow = 0;
+    uint16_t i2c1_flow = 0;
     FS4301_get_data_454(I2C1, &i2c1_flow);
     return i2c1_flow;
 }
-float P14_get(void)
+uint16_t P14_get(void)
 {
-    float i2c0_flow = 0;
+    uint16_t i2c0_flow = 0;
     FS4301_get_data_454(I2C0, &i2c0_flow);
     return i2c0_flow;
 }
-float P15_get(void)
+uint16_t P15_get(void)
 {
-    float i2c2_flow = 0;
+    uint16_t i2c2_flow = 0;
     FS4301_get_data_454(I2C2, &i2c2_flow);
     return i2c2_flow;
 }
 
-void FS4301_get_data_454(uint32_t i2c_periph, float *flow_data)
+void FS4301_get_data_454(uint32_t i2c_periph, uint16_t *flow_data)
 {
     uint8_t buf[2];
     i2c_master_send(i2c_periph, FS4301_CMD, 1, FS4301_Address);
     i2c_master_receive(i2c_periph, buf, 2, FS4301_Address);
-    uint16_t raw_flow = (uint16_t)buf[0] << 8 | buf[1];
-    float actual_flow = (float)raw_flow / 100.00;
-    *flow_data = (float)actual_flow;
+    *flow_data = (uint16_t)buf[0] << 8 | buf[1];
 }
 //-----------------------------------------------------------------------
-//                       温度
+//                       温度 (返回值是int16_t,是真实值的10倍,例如返回223,那么就是22.3)
 //-----------------------------------------------------------------------
 int16_t P7_get(void)
 {
@@ -1308,7 +1377,7 @@ void MAX31865_HWInit(uint32_t cs_pin)
 {
     MAX31865_bufWrite(cs_pin, 0x00, 0xC1);
 }
-int16_t MAX31865_TempGet_454(uint32_t cs_pin)
+uint16_t MAX31865_TempGet_454(uint32_t cs_pin)
 {
     uint8_t fault;
     // 读取故障寄存器来检查是否有故障
@@ -1344,25 +1413,23 @@ int16_t MAX31865_TempGet_454(uint32_t cs_pin)
 
     Rt = buf;
     RTD = Rt * 400 / 32768.00;
-    temp = ((RTD - 100) / 0.385055);
-
-    temp18b20 = (int16_t)temp;
-    return temp18b20;
+    temp = ((RTD - 100) / 0.385055) * 10;
+    return (uint16_t)temp;
 }
 //-----------------------------------------------------------------------
 //                       电磁阀
 //-----------------------------------------------------------------------
 void P4_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, pulse*10);
+    timer_channel_output_pulse_value_config(TIMER2, TIMER_CH_0, pulse * 10);
 }
 void P5_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, pulse*10);
+    timer_channel_output_pulse_value_config(TIMER12, TIMER_CH_0, pulse * 10);
 }
 void P6_PWM_set(uint32_t pulse)
 {
-    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, pulse*10);
+    timer_channel_output_pulse_value_config(TIMER3, TIMER_CH_0, pulse * 10);
 }
 //-----------------------------------------------------------------------
 //                       压电阀片
@@ -1378,6 +1445,10 @@ void YDP_control(FlagStatus on)
         gpio_bit_reset(GPIOB, GPIO_PIN_14); // 关闭压电阀片
     }
     delay_ms_454(2);
+}
+FlagStatus YDP_status_get(void)
+{
+    return gpio_output_bit_get(GPIOB, GPIO_PIN_14);
 }
 
 //-----------------------------------------------------------------------
@@ -1395,7 +1466,10 @@ void Pulverizer_control(FlagStatus on)
     }
     delay_ms_454(2);
 }
-
+FlagStatus Pulverizer_status_get(void)
+{
+    return gpio_output_bit_get(GPIOG, GPIO_PIN_4);
+}
 //-----------------------------------------------------------------------
 //                       电机
 //-----------------------------------------------------------------------
@@ -1443,6 +1517,169 @@ void motor_speed_percent(uint8_t percent)
     }
 }
 //-----------------------------------------------------------------------
+//                       SD
+//-----------------------------------------------------------------------
+sd_card_info_struct sd_cardinfo; /* information of SD card */
+uint32_t buf_write[512];         /* store the data written to the card */
+uint32_t buf_read[512];          /* store the data read from the card */
+sd_error_enum sd_error;
+
+void SD_init_454(void)
+{
+    uint16_t i = 5;
+
+    /* initialize the card */
+    do
+    {
+        sd_error = sd_io_init();
+    } while ((SD_OK != sd_error) && (--i));
+    if (i)
+    {
+        printf("\r\n Card init success!\r\n");
+    }
+    else
+    {
+        printf("\r\n Card init failed!\r\n");
+        LED3(ON);
+        while (1)
+        {
+        }
+    }
+    card_info_get();
+}
+
+sd_error_enum sd_io_init(void)
+{
+    sd_error_enum status = SD_OK;
+    uint32_t cardstate = 0;
+    status = sd_init();
+    if (SD_OK == status)
+    {
+        status = sd_card_information_get(&sd_cardinfo);
+    }
+    if (SD_OK == status)
+    {
+        status = sd_card_select_deselect(sd_cardinfo.card_rca);
+    }
+    status = sd_cardstatus_get(&cardstate);
+    if (cardstate & 0x02000000)
+    {
+        printf("\r\n the card is locked!");
+        while (1)
+        {
+        }
+    }
+    /* set bus mode */
+    if ((SD_OK == status) && (!(cardstate & 0x02000000)))
+    {
+        status = sd_bus_mode_config(SDIO_BUSMODE_4BIT);
+    }
+    /* set data transfer mode */
+    if (SD_OK == status)
+    {
+        //        status = sd_transfer_mode_config(SD_DMA_MODE);
+        status = sd_transfer_mode_config(SD_POLLING_MODE);
+    }
+    return status;
+}
+
+void card_info_get(void)
+{
+    uint8_t sd_spec, sd_spec3, sd_spec4, sd_security;
+    uint32_t block_count, block_size;
+    uint16_t temp_ccc;
+    printf("\r\n Card information:");
+    sd_spec = (sd_scr[1] & 0x0F000000) >> 24;
+    sd_spec3 = (sd_scr[1] & 0x00008000) >> 15;
+    sd_spec4 = (sd_scr[1] & 0x00000400) >> 10;
+    if (2 == sd_spec)
+    {
+        if (1 == sd_spec3)
+        {
+            if (1 == sd_spec4)
+            {
+                printf("\r\n## Card version 4.xx ##");
+            }
+            else
+            {
+                printf("\r\n## Card version 3.0x ##");
+            }
+        }
+        else
+        {
+            printf("\r\n## Card version 2.00 ##");
+        }
+    }
+    else if (1 == sd_spec)
+    {
+        printf("\r\n## Card version 1.10 ##");
+    }
+    else if (0 == sd_spec)
+    {
+        printf("\r\n## Card version 1.0x ##");
+    }
+
+    sd_security = (sd_scr[1] & 0x00700000) >> 20;
+    if (2 == sd_security)
+    {
+        printf("\r\n## SDSC card ##");
+    }
+    else if (3 == sd_security)
+    {
+        printf("\r\n## SDHC card ##");
+    }
+    else if (4 == sd_security)
+    {
+        printf("\r\n## SDXC card ##");
+    }
+
+    block_count = (sd_cardinfo.card_csd.c_size + 1) * 1024;
+    block_size = 512;
+    printf("\r\n## Device size is %dKB ##", sd_card_capacity_get());
+    printf("\r\n## Block size is %dB ##", block_size);
+    printf("\r\n## Block count is %d ##", block_count);
+
+    if (sd_cardinfo.card_csd.read_bl_partial)
+    {
+        printf("\r\n## Partial blocks for read allowed ##");
+    }
+    if (sd_cardinfo.card_csd.write_bl_partial)
+    {
+        printf("\r\n## Partial blocks for write allowed ##");
+    }
+    temp_ccc = sd_cardinfo.card_csd.ccc;
+    printf("\r\n## CardCommandClasses is: %x ##", temp_ccc);
+    if ((SD_CCC_BLOCK_READ & temp_ccc) && (SD_CCC_BLOCK_WRITE & temp_ccc))
+    {
+        printf("\r\n## Block operation supported ##");
+    }
+    if (SD_CCC_ERASE & temp_ccc)
+    {
+        printf("\r\n## Erase supported ##");
+    }
+    if (SD_CCC_WRITE_PROTECTION & temp_ccc)
+    {
+        printf("\r\n## Write protection supported ##");
+    }
+    if (SD_CCC_LOCK_CARD & temp_ccc)
+    {
+        printf("\r\n## Lock unlock supported ##");
+    }
+    if (SD_CCC_APPLICATION_SPECIFIC & temp_ccc)
+    {
+        printf("\r\n## Application specific supported ##");
+    }
+    if (SD_CCC_IO_MODE & temp_ccc)
+    {
+        printf("\r\n## I/O mode supported ##");
+    }
+    if (SD_CCC_SWITCH & temp_ccc)
+    {
+        printf("\r\n## Switch function supported ##");
+    }
+}
+
+//-----------------------------------------------------------------------
 //                       测试日志
 //-----------------------------------------------------------------------
 void motor_pressure_flow(int min_speed, int max_speed)
@@ -1454,16 +1691,16 @@ void motor_pressure_flow(int min_speed, int max_speed)
     }
     int i, j;
     // 温度
-    float temperature_P7;
-    float temperature_P9;
+    float temperature_P7_temp;
+    float temperature_P9_temp;
     // 压力
-    float pressure_P10;
-    float pressure_P11;
-    float pressure_P12;
+    float pressure_P10_temp;
+    float pressure_P11_temp;
+    float pressure_P12_temp;
     // 流量
-    float flow_P13;
-    float flow_P14;
-    float flow_P15;
+    float flow_P13_temp;
+    float flow_P14_temp;
+    float flow_P15_temp;
     TickType_t startTicks, endTicks, durationTicks;
     TickType_t currentTicks = xTaskGetTickCount();
 
@@ -1477,14 +1714,14 @@ void motor_pressure_flow(int min_speed, int max_speed)
         for (j = 0; j < 20; j++)
         {
 
-            temperature_P7 = P7_get();
-            temperature_P9 = P9_get();
-            pressure_P10 = P10_get();
-            pressure_P11 = P11_get();
-            pressure_P12 = P12_get();
-            flow_P13 = P13_get();
-            flow_P14 = P14_get();
-            flow_P15 = P15_get();
+            temperature_P7_temp = P7_get();
+            temperature_P9_temp = P9_get();
+            pressure_P10_temp = P10_get();
+            pressure_P11_temp = P11_get();
+            pressure_P12_temp = P12_get();
+            flow_P13_temp = P13_get();
+            flow_P14_temp = P14_get();
+            flow_P15_temp = P15_get();
             endTicks = xTaskGetTickCount();
             durationTicks = endTicks - startTicks;
             printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u\n",
@@ -1498,12 +1735,91 @@ void motor_pressure_flow(int min_speed, int max_speed)
                    pressure_P12,
                    flow_P13,
                    flow_P14,
-                   flow_P15, 
+                   flow_P15,
                    durationTicks);
         }
-                   delay_s_454(10);
+        delay_s_454(10);
     }
     motor_speed_percent(0);
+}
+void RTOS_motor_pressure_flow(int min_speed, int max_speed)
+{
+    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100)
+    {
+        printf("Error: Speed values must be between 0 and 100 and min_speed should be less than or equal to max_speed.\n");
+        return;
+    }
+    int i, j;
+    // 温度
+    float temperature_P7_temp;
+    float temperature_P9_temp;
+    // 压力
+    float pressure_P10_temp;
+    float pressure_P11_temp;
+    float pressure_P12_temp;
+    // 流量
+    float flow_P13_temp;
+    float flow_P14_temp;
+    float flow_P15_temp;
+    TickType_t startTicks, endTicks, durationTicks;
+    TickType_t currentTicks = xTaskGetTickCount();
+
+    printf("motor_speed_percent,motor_speed,motor_temp,temperature_P7,temperature_P9,pressure_P10,pressure_P11,pressure_P12,flow_P13,flow_P14,flow_P15,diff_time\n");
+
+    for (i = min_speed; i <= max_speed; i++)
+    {
+        startTicks = xTaskGetTickCount();
+        motor_speed_percent(i);
+
+        for (j = 0; j < 20; j++)
+        {
+            xSemaphoreGive(iicCollect_Start_Semaphore);
+            xSemaphoreTake(iicCollect_Ready_Semaphore, portMAX_DELAY);
+
+            temperature_P7_temp = P7_get();
+            temperature_P9_temp = P9_get();
+            pressure_P10_temp = pressure_P10;
+            pressure_P11_temp = pressure_P11;
+            pressure_P12_temp = pressure_P12;
+            flow_P13_temp = flow_P13;
+            flow_P14_temp = flow_P14;
+            flow_P15_temp = flow_P15;
+            endTicks = xTaskGetTickCount();
+            durationTicks = endTicks - startTicks;
+            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u\n",
+                   i,
+                   motor_status.current_speed,
+                   motor_status.motor_temperature,
+                   temperature_P7_temp,
+                   temperature_P9_temp,
+                   pressure_P10_temp,
+                   pressure_P11_temp,
+                   pressure_P12_temp,
+                   flow_P13_temp,
+                   flow_P14_temp,
+                   flow_P15_temp,
+                   durationTicks);
+        }
+        delay_s_454(3);
+    }
+    motor_speed_percent(0);
+}
+
+//-----------------------------------------------------------------------
+//                       FMC
+//-----------------------------------------------------------------------
+
+//-----------------------------------------------------------------------
+//                       校准
+//-----------------------------------------------------------------------
+
+void align_data(void)
+{
+    oxygen_voltage_air = sensor_data.oxygen;
+    printf("oxygen_voltage_air : %f\n", oxygen_voltage_air);
+    printf("voltage_p4 : %f\n", sensor_data.p4_valve);
+    printf("voltage_p5 : %f\n", sensor_data.p5_valve);
+    printf("voltage_p6 : %f\n", sensor_data.p6_valve);
 }
 
 //-----------------------------------------------------------------------
@@ -1558,28 +1874,36 @@ void DMA1_Channel0_IRQHandler(void)
         // sensor_data.p4_valve = voltage_p4;
         // sensor_data.p5_valve = voltage_p5;
         // sensor_data.p6_valve = voltage_p6;
-        sensor_data.pse540 = voltage_pse;
-        sensor_data.oxygen = oxygen_voltage;
+        // sensor_data.pse540 = voltage_pse;
+        // sensor_data.oxygen = oxygen_voltage;
+
+        sensor_data.p4_valve = (voltage_p4 > 1.5); // P4_PWM_set(0):1.02,P4_PWM_set(100):1.78
+        sensor_data.p5_valve = (voltage_p5 > 1);   // P5_PWM_set(0):0,P5_PWM_set(100):1.95
+        sensor_data.p6_valve = (voltage_p6 > 1);   // P6_PWM_set(0):0,P6_PWM_set(100):2.12
+        // sensor_data.pse540 = voltage_pse;
+        // sensor_data.oxygen = oxygen_voltage;
 
         // 根据传感器比例关系转换电压到物理量
-        sensor_data.p4_valve = voltage_p4 / 5.0f - 0.25f;
-        sensor_data.p5_valve = voltage_p5 / 10.0f;
-        sensor_data.p6_valve = voltage_p6 / 10.0f;
-        // // 根据PSE540传感器的比例关系转换电压到物理量
-        // if (voltage_pse < 0.25)
-        // { // 对应 p < 62.5 kPa
-        //     sensor_data.pse540 = 0.0f;
-        // }
-        // else if (voltage_pse > 3.05)
-        // { // 对应 p > 887.5 kPa
-        //     sensor_data.pse540 = 887.5f;
-        // }
-        // else
-        // { // 对应 62.5 kPa <= p <= 887.5 kPa
-        //     sensor_data.pse540 = (voltage_pse + 0.25f) / 0.004f;
-        // }
-        // // !根据氧气传感器的比例关系转换电压到氧气浓度 需要修正!
-        // sensor_data.oxygen = ((oxygen_voltage - 3.3) / (oxygen_voltage - 3.3)) * 20.9f * 100.0f;
+        // sensor_data.p4_valve = voltage_p4 / 5.0f - 0.25f;
+        // sensor_data.p5_valve = voltage_p5 / 10.0f;
+        // sensor_data.p6_valve = voltage_p6 / 10.0f;
+        // 根据PSE540传感器的比例关系转换电压到物理量
+        if (voltage_pse < 0.25)
+        { // 对应 62.5 kPa <= p <= 887.5 kPa
+            sensor_data.pse540 = (voltage_pse + 0.25f) / 0.004f;
+        }
+
+        else if (voltage_pse > 3.05)
+        { // 对应 p > 887.5 kPa
+            sensor_data.pse540 = 887.5f;
+        }
+        else
+        { // 对应 p < 62.5 kPa
+            sensor_data.pse540 = 0.0f;
+        }
+        //! 根据氧气传感器的比例关系转换电压到氧气浓度 需要修正!
+        //! oxygen_voltage_air需要变更为环境空气中的值,目前默认设置为1.0
+        sensor_data.oxygen = ((oxygen_voltage - 3.3) / (oxygen_voltage_air - 3.3)) * 20.9f * 100.0f;
     }
     dma_interrupt_flag_clear(DMA1, DMA_CH0, DMA_INT_FLAG_FTF);
 }
@@ -1611,7 +1935,7 @@ void DMA0_Channel1_IRQHandler(void)
         }
         // 解析数据
         motor_status.frame_header = MOTOR_received_frame[0];
-        motor_status.current_speed = ((uint16_t)MOTOR_received_frame[2] << 8 | MOTOR_received_frame[1]) * 2;
+        motor_status.current_speed = (uint16_t)MOTOR_received_frame[2] << 8 | (uint16_t)MOTOR_received_frame[1];
         motor_status.motor_temperature = (int8_t)MOTOR_received_frame[3];
         motor_status.fault_alarm = MOTOR_received_frame[4];
         motor_status.checksum = MOTOR_received_frame[5];

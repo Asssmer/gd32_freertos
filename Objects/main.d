@@ -50,4 +50,9 @@
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\mpu_wrappers.h \
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\task.h \
   C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\list.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdio.h
+  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\semphr.h \
+  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\queue.h \
+  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\task.h \
+  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdbool.h \
+  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdio.h 454software\.\sdcard.h \
+  454software\sdcard.h

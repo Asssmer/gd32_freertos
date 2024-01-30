@@ -1,6 +1,7 @@
 --cpu=Cortex-M4.fp.sp
 ".\objects\main.o"
 ".\objects\454software.o"
+".\objects\sdcard.o"
 ".\objects\clib_arm.o"
 ".\objects\cmsis_os1.o"
 ".\objects\cmsis_os2.o"

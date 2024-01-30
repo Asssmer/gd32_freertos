@@ -1,17 +1,14 @@
-./objects/454software.o: 454software\454software.c \
-  454software\.\454software.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\FreeRTOS.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stddef.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdint.h \
-  RTE\RTOS\FreeRTOSConfig.h RTE\_Target_1\RTE_Components.h \
+./objects/sdcard.o: 454software\sdcard.c 454software\sdcard.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Include\gd32f4xx.h \
   C:\Keil_v5\Packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include\core_cm4.h \
+  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdint.h \
   C:\Keil_v5\Packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_version.h \
   C:\Keil_v5\Packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_compiler.h \
   C:\Keil_v5\Packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include\cmsis_armclang.h \
   C:\Keil_v5\Packs\ARM\CMSIS\5.9.0\CMSIS\Core\Include\mpu_armv7.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Include\system_gd32f4xx.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Include\gd32f4xx_libopt.h \
+  RTE\_Target_1\RTE_Components.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_adc.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_can.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_crc.h \
@@ -42,17 +39,4 @@
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_trng.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_usart.h \
   C:\Keil_v5\Packs\GigaDevice\GD32F4xx_DFP\3.0.3\Device\F4XX\Firmware\Peripherals\inc\gd32f4xx_wwdgt.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\CMSIS\RTOS2\FreeRTOS\Include\freertos_evr.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\string.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\projdefs.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\portable.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\deprecated_definitions.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\portable\GCC\ARM_CM4F\portmacro.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\mpu_wrappers.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\task.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\list.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\semphr.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\queue.h \
-  C:\Keil_v5\Packs\ARM\CMSIS-FreeRTOS\10.5.1\Source\include\task.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdbool.h \
-  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stdio.h 454software\.\sdcard.h
+  C:\Keil_v5\ARM\ARMCLANG\Bin\..\include\stddef.h
