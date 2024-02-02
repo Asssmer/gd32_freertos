@@ -29,11 +29,8 @@ volatile uint16_t adc_values_454[ADC_CHANNEL_COUNT];
 volatile MotorStatus motor_status;
 volatile SensorData sensor_data;
 volatile pwm_capture_data_t pwm_values = {0};
-SemaphoreHandle_t RtSample_Mutex;
-SemaphoreHandle_t iicCollect_Ready_Semaphore;
-SemaphoreHandle_t iicCollect_Start_Semaphore;
-//! 余辉教授文档需求
-volatile struct struRtSample RtSample;
+QueueHandle_t USART0_RX_xQueue;
+
 //-----------------------------------------------------------------------
 //                       初始化
 //-----------------------------------------------------------------------
@@ -871,6 +868,19 @@ float adc_to_voltage(uint16_t adc_value)
 {
     return (adc_value * 3.3f) / 4095;
 }
+// 与上位机的通信协议中的校验码计算,在接收中断函数中使用
+uint16_t calculate_checksum_IRQ(uint8_t *data, uint16_t length)
+{
+    uint32_t checksum = 0;
+
+    for (uint16_t i = 3; i < length - 2; ++i)
+    {
+        checksum += data[i];
+    }
+
+    // 取低16位
+    return (uint16_t)(checksum & 0xFFFF);
+}
 //-----------------------------------------------------------------------
 //                       LED
 //-----------------------------------------------------------------------
@@ -1680,132 +1690,6 @@ void card_info_get(void)
 }
 
 //-----------------------------------------------------------------------
-//                       测试日志
-//-----------------------------------------------------------------------
-void motor_pressure_flow(int min_speed, int max_speed)
-{
-    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100)
-    {
-        printf("Error: Speed values must be between 0 and 100 and min_speed should be less than or equal to max_speed.\n");
-        return;
-    }
-    int i, j;
-    // 温度
-    float temperature_P7_temp;
-    float temperature_P9_temp;
-    // 压力
-    float pressure_P10_temp;
-    float pressure_P11_temp;
-    float pressure_P12_temp;
-    // 流量
-    float flow_P13_temp;
-    float flow_P14_temp;
-    float flow_P15_temp;
-    TickType_t startTicks, endTicks, durationTicks;
-    TickType_t currentTicks = xTaskGetTickCount();
-
-    printf("motor_speed_percent,motor_speed,motor_temp,temperature_P7,temperature_P9,pressure_P10,pressure_P11,pressure_P12,flow_P13,flow_P14,flow_P15,diff_time\n");
-
-    for (i = min_speed; i <= max_speed; i++)
-    {
-        startTicks = xTaskGetTickCount();
-        motor_speed_percent(i);
-
-        for (j = 0; j < 20; j++)
-        {
-
-            temperature_P7_temp = P7_get();
-            temperature_P9_temp = P9_get();
-            pressure_P10_temp = P10_get();
-            pressure_P11_temp = P11_get();
-            pressure_P12_temp = P12_get();
-            flow_P13_temp = P13_get();
-            flow_P14_temp = P14_get();
-            flow_P15_temp = P15_get();
-            endTicks = xTaskGetTickCount();
-            durationTicks = endTicks - startTicks;
-            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u\n",
-                   i,
-                   motor_status.current_speed,
-                   motor_status.motor_temperature,
-                   temperature_P7,
-                   temperature_P9,
-                   pressure_P10,
-                   pressure_P11,
-                   pressure_P12,
-                   flow_P13,
-                   flow_P14,
-                   flow_P15,
-                   durationTicks);
-        }
-        delay_s_454(10);
-    }
-    motor_speed_percent(0);
-}
-void RTOS_motor_pressure_flow(int min_speed, int max_speed)
-{
-    if (min_speed < 0 || min_speed > 100 || max_speed < 0 || max_speed > 100)
-    {
-        printf("Error: Speed values must be between 0 and 100 and min_speed should be less than or equal to max_speed.\n");
-        return;
-    }
-    int i, j;
-    // 温度
-    float temperature_P7_temp;
-    float temperature_P9_temp;
-    // 压力
-    float pressure_P10_temp;
-    float pressure_P11_temp;
-    float pressure_P12_temp;
-    // 流量
-    float flow_P13_temp;
-    float flow_P14_temp;
-    float flow_P15_temp;
-    TickType_t startTicks, endTicks, durationTicks;
-    TickType_t currentTicks = xTaskGetTickCount();
-
-    printf("motor_speed_percent,motor_speed,motor_temp,temperature_P7,temperature_P9,pressure_P10,pressure_P11,pressure_P12,flow_P13,flow_P14,flow_P15,diff_time\n");
-
-    for (i = min_speed; i <= max_speed; i++)
-    {
-        startTicks = xTaskGetTickCount();
-        motor_speed_percent(i);
-
-        for (j = 0; j < 20; j++)
-        {
-            xSemaphoreGive(iicCollect_Start_Semaphore);
-            xSemaphoreTake(iicCollect_Ready_Semaphore, portMAX_DELAY);
-
-            temperature_P7_temp = P7_get();
-            temperature_P9_temp = P9_get();
-            pressure_P10_temp = pressure_P10;
-            pressure_P11_temp = pressure_P11;
-            pressure_P12_temp = pressure_P12;
-            flow_P13_temp = flow_P13;
-            flow_P14_temp = flow_P14;
-            flow_P15_temp = flow_P15;
-            endTicks = xTaskGetTickCount();
-            durationTicks = endTicks - startTicks;
-            printf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%u\n",
-                   i,
-                   motor_status.current_speed,
-                   motor_status.motor_temperature,
-                   temperature_P7_temp,
-                   temperature_P9_temp,
-                   pressure_P10_temp,
-                   pressure_P11_temp,
-                   pressure_P12_temp,
-                   flow_P13_temp,
-                   flow_P14_temp,
-                   flow_P15_temp,
-                   durationTicks);
-        }
-        delay_s_454(3);
-    }
-    motor_speed_percent(0);
-}
-
-//-----------------------------------------------------------------------
 //                       FMC
 //-----------------------------------------------------------------------
 
@@ -1941,41 +1825,22 @@ void DMA0_Channel1_IRQHandler(void)
         motor_status.checksum = MOTOR_received_frame[5];
         // 验证校验和
         motor_status.checksum_valid = 0;
-        // printf("\n SPEED: %f\n",motor_status.current_speed);
-        // printf("\n TEMP_: %f\n",motor_status.motor_temperature);
     }
     dma_interrupt_flag_clear(DMA0, DMA_CH1, DMA_INT_FLAG_FTF);
 }
 void USART0_IRQHandler(void)
 {
+    // 使用队列处理收到的数据的原因:
+    // 1.噪声：串口通信可能会受到电磁干扰，导致传输的数据出现错误。
+    // 2.中断或延迟：接收方可能因为某些原因（例如处理其他任务）延迟处理接收到的数据，这可能导致数据帧的一部分字节在当前缓冲区结束，而其余字节在下一个新的缓冲区开始。
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    // 检查是否收到数据
     if (usart_interrupt_flag_get(USART0, USART_INT_FLAG_RBNE) != RESET)
     {
-        int received_data = usart_data_receive(USART0);
-        if (received_data != '\n')
-        {
-            if (usart0_res_length < 11)
-            {
-                usart0_res[usart0_res_length++] = received_data;
-                usart0_res[usart0_res_length] = '\0'; // 确保字符串以null结尾
-            }
-            else
-            {
-                usart0_res_length = 0;
-                memset(usart0_res, 0, 12);
-            }
-        }
-        else
-        {
-            // 成功解析数字
-
-            // int motor_speed = atoi(usart0_res); // 将解析结果保存在变量中
-            // motor_control(motor_speed);
-
-            uint8_t motor_speed = atoi(usart0_res); // 将解析结果保存在变量中
-            motor_speed_percent(motor_speed);
-            printf("Set motor speed: %hu\n", motor_speed);
-            usart0_res_length = 0; // 重置缓冲区
-            memset(usart0_res, 0, 12);
-        }
+        // 读取数据
+        uint8_t data = usart_data_receive(USART0);
+        xQueueSendFromISR(USART0_RX_xQueue, &data, &xHigherPriorityTaskWoken);
     }
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

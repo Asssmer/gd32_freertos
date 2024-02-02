@@ -4,9 +4,9 @@
 #define GD32F450
 
 #include "FreeRTOS.h"
+#include "queue.h"
 #include "task.h"
 #include "semphr.h"
-
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -26,7 +26,6 @@
 #include "gd32f4xx_adc.h"
 #include "gd32f4xx_sdio.h"
 #include "gd32f4xx_fmc.h"
-
 #include "./sdcard.h"
 
 // #define BOARD_VER_1
@@ -50,130 +49,7 @@
 #define MOTOR_FRAME_SIZE 6
 
 // 全局数据声明
-//! 余辉教授文档需求
-#define SAMPLE_RATE 10                        //! 指定是100
-#define SAMPLES_PER_MINUTE (60 * SAMPLE_RATE) // 每分钟采样数据缓存数量
 
-struct struRtSample
-{
-    uint16_t uIndex;
-    int16_t u16P1, u16P2, u16P3; // mbar
-    uint16_t u16F1, u16F2, u16F3; // ml
-    uint8_t uO2;                  // %
-    uint8_t uT1, uT2, uT3;
-    uint16_t uMotor;
-    bool bValve1, bValve2, bValve3;
-};
-
-struct stru10HzSamplePerMinute
-{
-    uint8_t u8Year, u8Month, u8Day, u8Hour, u8Minute; // 当前记录时间
-    uint16_t u16P1[SAMPLES_PER_MINUTE], u16P2[SAMPLES_PER_MINUTE], u16P3[SAMPLES_PER_MINUTE];
-    uint16_t u16F1[SAMPLES_PER_MINUTE], u16F2[SAMPLES_PER_MINUTE], u16F3[SAMPLES_PER_MINUTE];
-};
-
-struct struTarget
-{
-    uint8_t uVentilationMode;                        // 辅助通气模式
-    uint16_t uInspirationTime;                       // 目标吸气持续时长（单位ms）
-    uint16_t uExpirationTime;                        // 目标呼气持续时长（单位ms）
-    uint16_t uPressureRiseTime;                      // 压力上升时长（单位ms）
-    uint16_t uApnoeaTimeOut;                         // 呼吸暂停时长
-    uint16_t uMaximumPressure;                       // 通气压力控制上限
-    uint16_t uInspirationDeltaPressure;              // 吸气压力波动限, 用于智能判断自主吸气开始
-    uint16_t uPositiveEndExpirationPressure;         // 呼气正压通气压力（压力控制主要指标）
-    uint16_t uPressureSupportLowDeltaPressure;       // 吸气压力波动下限, 用于智能判断是否面罩脱落
-    uint16_t uResuscitationSensitivityLevel;         // 复苏敏感级别
-    uint16_t uTidalVolume;                           // 目标潮气量（单位ml）
-    uint16_t uMaximumPressurePCVR;                   // PCVR最大压力
-    uint16_t uMinimumPressurePCVR;                   // PCVR最小压力
-    bool bIntrinsicPeepEnable;                       // 内部PEEP使能
-    uint16_t uPercentageO2;                          // 氧浓度百分比
-    uint16_t uContinuousFlow;                        // 持续流量
-    uint16_t uOxygenSupplyConcentration;             // 氧供应浓度
-    uint16_t uInspiratoryTriggerFlow;                // 吸气触发流
-    uint16_t uExpiratoryFlowCycledTriggerPercentage; // 呼气流量循环触发百分比
-    bool bPCVREnable;                                // PCVR使能
-    bool bNonInvasiveVentilationEnable;              // 非侵入式通气使能
-    bool bPressureSupportLowEnable;                  // 低压支持使能
-    bool bInspiratoryFlowTriggerEnable;              // 吸气流量触发使能
-    bool bLPOEnable;                                 // LPO使能
-    bool bSighEnable;                                // 叹息使能
-    bool bTubeCompensationInspirationEnable;         // 管路补偿吸气使能
-    bool bP01Enable;                                 // P01使能
-    uint16_t uRecruitmentInspirationDeltaPressure;   // 招募吸气压力差
-    uint16_t uRecruitmentPEEP;                       // 招募PEEP
-    uint16_t uRecruitmentNumberofBreaths;            // 招募呼吸次数
-    bool bNebulizerEnable;                           // 雾化器使能
-    uint16_t uSighDeltaPressure;                     // 叹息压力差
-    uint16_t uSighDeltaTidalVolume;                  // 叹息潮气量差
-    uint16_t uSighBreathCount;                       // 叹息呼吸计数
-    bool bInspiratoryHoldEnable;                     // 吸气保持使能
-    bool bRecruitmentEnable;                         // 招募使能
-    bool bExpiratoryHoldEnable;                      // 呼气保持使能
-    uint8_t uPatientType;                            // 患者类型
-    uint8_t uPatientSensorPosition;                  // 患者传感器位置
-    uint8_t uExpirationValvePosition;                // 呼气阀位置
-    uint8_t uPatientSensorTemperature;               // 患者传感器温度上限
-    bool bCompensateCompressibleVolumeEnable;        // 可压缩体积补偿使能
-    uint8_t uTubeType;                               // 管路类型
-    uint8_t uTubeDiameter;                           // 管路直径
-    uint8_t TubeCompensationPercentage;              // 管路补偿百分比
-    bool bTubeCompensationExpirationEnable;          // 管路补偿呼气使能
-    uint16_t uNebulizerActiveTime;                   // 雾化器活动时间
-    uint8_t uPatientSensorType;                      // 患者传感器类型
-    uint8_t uGasStandard;                            // 气体标准
-    uint8_t uHumidifierType;                         // 加湿器类型
-    uint8_t uSensitivitySpontaneousDetection;        // 自发性检测敏感性
-    uint16_t uMinuteVolume;                          // 分钟通气量
-    uint16_t uInspiratoryFlow;                       // 吸气流量
-    uint8_t uInspiratorySpontaneousBreathingWindow;  // 吸气自主呼吸窗
-    uint8_t uExpiratorySpontaneousBreathingWindow;   // 呼气自主呼吸窗
-    bool bInspiratoryPressureTriggerEnable;          // 吸气压力触发使能
-    uint16_t uInspiratoryTriggerDeltaPressure;       // 吸气触发压力差
-    int16_t sExpiratoryTriggerFlow;                  // 呼气触发流
-    uint16_t uPressureSupportMaxStrokeTime;          // 压力支持最大中风时间
-    uint16_t uInspiratoryHoldTime;                   // 吸气保持时间
-    uint8_t uLeakageCompensationType;                // 漏气补偿类型
-    uint8_t uLeakageCompensationPercentage;          // 漏气补偿百分比
-    bool bPressureSupportHighEnable;                 // 高压支持使能
-    uint16_t uPressureSupportHighDeltaPressure;      // 高压支持压力差
-    bool bApnoeaDetectionEnable;                     // 呼吸暂停检测使能
-    uint16_t uRecruitmentInspirationTime;            // 招募吸气时间
-    uint16_t uRecruitmentExpirationTime;             // 招募呼气时间
-    uint16_t uRecruitmentPressureRiseTime;           // 招募压力上升时间
-    uint16_t uNebulizerExternallyDeliveredFlow;      // 外部送气流量
-    uint8_t uNebulizerPosition;                      // 雾化器位置
-    bool bPPSEnable;                                 // PPS使能
-    uint8_t uPPSPercentageSupport;                   // PPS百分比支持
-    uint16_t uPPSCompliance;                         // PPS顺应性
-    uint16_t uPPSResistance;                         // PPS阻力
-    uint16_t uExpiratoryFlowTriggerEnable;           // 呼气流量触发使能
-    uint16_t uExpiratoryFlowCycledTriggerEnable;     // 呼气流量循环触发使能
-};
-
-struct struRtMeasure
-{
-    uint16_t uPatientFlow;
-    uint16_t uPatientPressure;
-    uint16_t uOutputPressure;
-    uint16_t uTrachealPressure;
-    uint16_t uOutputFlow;
-    uint16_t uAirFlow;
-    uint16_t uOxygenFlow;
-    uint16_t uPeakInspiratoryFlow;
-    uint16_t uPeakExpiratoryFlow;
-    uint16_t uPositiveEndExpiratoryPressure;
-    uint16_t uPeakInspiratoryPressure;
-    uint16_t uMeanPressure, uMinimumPressure;
-    uint16_t uP01Pressure;
-    uint16_t uIntrinsicPeep;
-    uint16_t uExpiratoryTidalVolumeSp, uExpiratoryTidalVolumeMand, uExpiratoryMinuteVolumeSp, uExpiratoryMinuteVolumeMand;
-    uint16_t uRespiratoryRateSp, uRespiratoryRateMand, uStrokewiseFiO2, uLungResistance, uDynamicCompliance, uRSBI, uPressureTimeProduct, uLeakageVolume, uAmbientPressure;
-    uint16_t uOxygenSupplyPressure, uGasInputTemperature, uGasOutputTemperature, uStandbyTime, uRunningTime, uPatientVolume, uPlateauPressure, uRealtimeFiO2;
-    uint16_t uInspiratoryTidalVolumeMand, uInspiratoryMinuteVolumeMand, uInspiratoryTidalVolumeSp, uInspiratoryMinuteVolumeSp;
-    uint16_t uLeakageFlow, uInspiratoryTime, uExpiratoryTime, uRCInspiratoryTime, uRCExpiratoryTime, uCompressibleVolume, uExpiratoryMinuteVolumeTotal, uRespiratoryRateTotal;
-};
 
 //! 最初驱动编写:
 extern volatile uint8_t MOTOR_received_frame[MOTOR_FRAME_SIZE];
@@ -183,16 +59,16 @@ typedef struct
     uint8_t frame_header; // 帧头
     uint16_t current_speed;
     int8_t motor_temperature; // 电机温度
-    uint8_t fault_alarm;     // 故障报警状态
-    uint8_t checksum;        // 校验和
-    uint8_t checksum_valid;  // 校验和是否有效
+    uint8_t fault_alarm;      // 故障报警状态
+    uint8_t checksum;         // 校验和
+    uint8_t checksum_valid;   // 校验和是否有效
 } MotorStatus;
 typedef struct
 {
-    bool p4_valve;    // P4比例阀
-    bool p5_valve;    // P5电磁阀
-    bool p6_valve;    // P6电磁阀
-    uint16_t pse540;      // PSE540
+    bool p4_valve;       // P4比例阀
+    bool p5_valve;       // P5电磁阀
+    bool p6_valve;       // P6电磁阀
+    uint16_t pse540;     // PSE540
     uint8_t temperature; // 温度(备用)
     uint8_t oxygen;      // P16辅助氧浓度传感器
 } SensorData;
@@ -210,36 +86,6 @@ typedef struct
     uint32_t falling_edge_value2; // 下降沿时的计数器值
     float duty_cycle2;            // 计算得到的占空比
 } pwm_capture_data_t;
-
-//-----------------------------------------------------------------------
-//                       与上位机通信协议
-//-----------------------------------------------------------------------
-// 定义通信协议中的帧头和帧尾
-#define FRAME_HEADER_BYTE_1 0xEB
-#define FRAME_HEADER_BYTE_2 0x90
-#define FRAME_HEADER_BYTE_3 0xAA
-
-// 定义指令类别
-#define INSTRUCTION_TYPE_01 0x01
-#define INSTRUCTION_TYPE_02 0x02
-
-// 定义串口通信函数，这里假设你已经配置好串口
-extern void send_data(uint8_t *data, uint16_t length);
-
-// 定义数据结构，表示接收到的指令
-typedef struct {
-    uint8_t instruction_type;
-    uint8_t data[50];  // 假设最大数据长度为50字节，根据实际情况调整
-} ReceivedInstruction;
-
-// 函数声明
-void parse_received_data(uint8_t *received_data, uint16_t length);
-void handle_instruction_type_01(ReceivedInstruction *instruction);
-void handle_instruction_type_02(ReceivedInstruction *instruction);
-
-
-
-
 
 //-----------------------------------------------------------------------
 //                       初始化函数
@@ -269,6 +115,7 @@ void delay_s_454(uint32_t seconds);
 char *intToStr(int num);
 char *floatToStr(float num, int afterpoint);
 void usart_echo(uint32_t usart_periph);
+uint16_t calculate_checksum_IRQ(uint8_t *data, uint16_t length);
 // LED
 void LED1(FlagStatus state);
 void LED2(FlagStatus state);
@@ -333,10 +180,8 @@ FlagStatus Pulverizer_status_get(void);
 void motor_control(uint16_t speed);
 void motor_speed_percent(uint8_t percent);
 
-// 测试日志输出
-void motor_pressure_flow(int min_speed, int max_speed);
-void RTOS_motor_pressure_flow(int min_speed, int max_speed);
-//校准
+
+// 校准
 void align_data(void);
 
 // SD卡

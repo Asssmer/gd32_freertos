@@ -1,18 +1,17 @@
-#include "./454software/454software.h"
-#include "./454software/sdcard.h"
+#include "./454software/rtos_level.h"
 //-----------------------------------------------------------------------
 //                       底层驱动信息
 //-----------------------------------------------------------------------
 extern volatile MotorStatus motor_status; // 电机
 extern volatile SensorData sensor_data;   // ADC(包含电磁阀状态,氧气压力,氧气浓度)
-extern int16_t temperature_P7;              // P7_get();温度
-extern int16_t temperature_P9;              // P9_get();温度
-extern int16_t pressure_P10;                // P10_get();压力
-extern int16_t pressure_P11;                // P11_get();压力
-extern int16_t pressure_P12;                // P12_get();
-extern uint16_t flow_P13;                    // P13_get();流量
-extern uint16_t flow_P14;                    // P14_get();流量
-extern uint16_t flow_P15;                    // P15_get();流量
+extern int16_t temperature_P7;            // P7_get();温度
+extern int16_t temperature_P9;            // P9_get();温度
+extern int16_t pressure_P10;              // P10_get();压力
+extern int16_t pressure_P11;              // P11_get();压力
+extern int16_t pressure_P12;              // P12_get();
+extern uint16_t flow_P13;                 // P13_get();流量
+extern uint16_t flow_P14;                 // P14_get();流量
+extern uint16_t flow_P15;                 // P15_get();流量
 // LED控制
 //   LED1(ON),LED1(OFF)
 //   LED2(ON),LED2(OFF)
@@ -26,8 +25,12 @@ extern uint16_t flow_P15;                    // P15_get();流量
 // 雾化接口器控制
 //   Pulverizer_control(ON),Pulverizer_control(OFF),
 
+//-----------------------------------------------------------------------
+//                       rtos_level
+//-----------------------------------------------------------------------
 //! 余辉教授文档需求
-extern volatile struct struRtSample RtSample;
+extern QueueHandle_t USART0_RX_xQueue;
+extern volatile struRtSample RtSample;
 extern SemaphoreHandle_t RtSample_Mutex;
 extern SemaphoreHandle_t iicCollect_Ready_Semaphore;
 extern SemaphoreHandle_t iicCollect_Start_Semaphore;
@@ -40,6 +43,7 @@ void Task2(void *pvParameters);
 void iicTask(void *pvParameters);
 void gTaskRtSample(void *pvParameters);
 void gTaskRtMotor(void *pvParameters);
+void gTaskCommMonitor(void *pvParameters);
 void gTaskLocalRecSave(void *pvParameters);
 //-----------------------------------------------------------------------
 //                       主函数
@@ -53,12 +57,11 @@ int main()
     // 获取校准数据
     // align_data();
 
-    usart0_send_454("initinitialize finished!\n",10);
-
     // 初始化互斥量和信号量
     RtSample_Mutex = xSemaphoreCreateMutex();
     iicCollect_Ready_Semaphore = xSemaphoreCreateBinary();
     iicCollect_Start_Semaphore = xSemaphoreCreateBinary();
+    USART0_RX_xQueue = xQueueCreate(256, sizeof(char));
 
     motor_control(0);
     delay_ms_454(100);
@@ -71,6 +74,7 @@ int main()
 
     // xTaskCreate(gTaskRtSample, "gTaskRtSample", 1024, (void *)1, 40, NULL);
     // xTaskCreate(gTaskRtMotor, "gTaskRtMotor", 1024, (void *)1, 40, NULL);
+    // xTaskCreate(gTaskCommMonitor, "gTaskCommMonitor", 1024, (void *)1, 40, NULL);
     // xTaskCreate(gTaskLocalRecSave, "gTaskLocalRecSave", 1024, (void *)1, 10, NULL);
 
     xTaskCreate(Task1, "test", 1024, (void *)1, 50, NULL);
@@ -88,7 +92,6 @@ void Task2(void *pvParameters)
 {
     while (1)
     {
-        printf("Task2!\n");
         gpio_bit_toggle(GPIOG, GPIO_PIN_6);
         vTaskDelay(1000);
     }
@@ -112,7 +115,6 @@ void Task1(void *pvParameters)
     // flow_P15 = P15_get();
     while (1)
     {
-        printf("Task1!\n");
         gpio_bit_toggle(GPIOG, GPIO_PIN_7);
         vTaskDelay(1000);
     }
@@ -165,20 +167,20 @@ void gTaskRtSample(void *pvParameters)
         {
             // 采集数据并更新数据结构
             RtSample.uIndex = xLastWakeTime; // 直接使用当前的TickCount
-            RtSample.uT1 = P7_get();
-            RtSample.uT2 = P9_get();
-            RtSample.uT3 = motor_status.motor_temperature;
-            RtSample.u16P1 = pressure_P10;
-            RtSample.u16P2 = pressure_P11;
-            RtSample.u16P3 = pressure_P12;
+            RtSample.s16T1 = P7_get();
+            RtSample.s16T1 = P9_get();
+            RtSample.s16T1 = motor_status.motor_temperature;
+            RtSample.s16P1 = pressure_P10;
+            RtSample.s16P1 = pressure_P11;
+            RtSample.s16P1 = pressure_P12;
             RtSample.u16F1 = flow_P13;
             RtSample.u16F2 = flow_P14;
             RtSample.u16F3 = flow_P15;
-            RtSample.uMotor = motor_status.current_speed;
+            RtSample.u16MotorSV = motor_status.current_speed;
             RtSample.uO2 = sensor_data.oxygen;
-            RtSample.bValve1 = sensor_data.p4_valve;
-            RtSample.bValve2 = sensor_data.p5_valve;
-            RtSample.bValve3 = sensor_data.p6_valve;
+            RtSample.uValve1 = sensor_data.p4_valve;
+            RtSample.uValve2 = sensor_data.p5_valve;
+            RtSample.uValve3 = sensor_data.p6_valve;
             // 释放互斥量
             xSemaphoreGive(RtSample_Mutex);
         }
@@ -205,9 +207,50 @@ void gTaskRtMotor(void *pvParameters)
         // 2. 更新全局数据结构
         // 在任务gTaskRtSample中更新
 
-        // 3. 生成状态报文并放入发送队列(直接printf发送即可,上位机去解析字符串)
-        printf("Speed: %d, Valve1: %f, Valve2: %f, Valve3: %f\n",
-               motor_status.current_speed, sensor_data.p4_valve, sensor_data.p5_valve, sensor_data.p6_valve);
+        // 3. 生成状态报文并放入发送队列
+        upload_struRtSample();
+    }
+}
+void gTaskCommMonitor(void *pvParameters)
+{
+    char rxByte;
+    for (;;)
+    {
+        if (xQueueReceive(USART0_RX_xQueue, &rxByte, portMAX_DELAY))
+        {
+            // 解析数据帧
+            static char USART0_RX_frameBuffer[256];
+            static uint16_t USART0_RX_bufferIndex = 0;
+            USART0_RX_frameBuffer[USART0_RX_bufferIndex++] = rxByte;
+            // 检查是否收到完整的帧头
+            if (USART0_RX_bufferIndex >= 3)
+            {
+                if (USART0_RX_frameBuffer[0] == 0xEB && USART0_RX_frameBuffer[1] == 0x90 && USART0_RX_frameBuffer[2] == 0xAA)
+                {
+                    uint8_t dataLength = USART0_RX_frameBuffer[3];
+                    // 检查是否收到了完整的数据帧
+                    if (USART0_RX_bufferIndex >= (dataLength + 4))
+                    {
+                        // 处理数据帧
+                        processDataFrame(USART0_RX_frameBuffer, USART0_RX_bufferIndex);
+                        // 重置缓冲区索引，为接收新帧做准备
+                        USART0_RX_bufferIndex = 0;
+                    }
+                }
+                else
+                {
+                    // 如果帧头不匹配，重置缓冲区索引并从新位置开始填充
+                    // 这将丢弃之前的数据，因为它们不是我们想要的帧的一部分
+                    memmove(USART0_RX_frameBuffer, USART0_RX_frameBuffer + 1, --USART0_RX_bufferIndex);
+                }
+            }
+            // 检查缓冲区是否已满
+            if (USART0_RX_bufferIndex == 256)
+            {
+                // 缓冲区溢出，需要进行错误处理
+                USART0_RX_bufferIndex = 0; // 重置缓冲区索引
+            }
+        }
     }
 }
 void gTaskLocalRecSave(void *pvParameters)

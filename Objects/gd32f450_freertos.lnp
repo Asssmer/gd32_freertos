@@ -2,6 +2,7 @@
 ".\objects\main.o"
 ".\objects\454software.o"
 ".\objects\sdcard.o"
+".\objects\rtos_level.o"
 ".\objects\clib_arm.o"
 ".\objects\cmsis_os1.o"
 ".\objects\cmsis_os2.o"

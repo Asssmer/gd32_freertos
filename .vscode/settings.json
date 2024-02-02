@@ -21,6 +21,8 @@
         "stdint.h": "c",
         "stdbool.h": "c",
         "454software.h": "c",
-        "sdcard.h": "c"
+        "sdcard.h": "c",
+        "xutility": "c",
+        "cstddef": "c"
     }
 }
