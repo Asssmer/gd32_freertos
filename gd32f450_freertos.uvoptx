@@ -148,7 +148,24 @@
           <Name>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0GD32F4xx_3MB -FS08000000 -FL0300000 -FP0($$Device:GD32F450ZK$Flash\GD32F4xx_3MB.FLM))</Name>
         </SetRegEntry>
       </TargetDriverDllRegistry>
-      <Breakpoint/>
+      <Breakpoint>
+        <Bp>
+          <Number>0</Number>
+          <Type>0</Type>
+          <LineNumber>738</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>134223478</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>1</BreakIfRCount>
+          <Filename>.\454software\454software.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression>\\gd32f450_freertos\454software/454software.c\738</Expression>
+        </Bp>
+      </Breakpoint>
       <WatchWindow1>
         <Ww>
           <count>0</count>
@@ -204,6 +221,11 @@
           <count>10</count>
           <WinNumber>1</WinNumber>
           <ItemText>usart0_res</ItemText>
+        </Ww>
+        <Ww>
+          <count>11</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>USART0_RX_xQueue</ItemText>
         </Ww>
       </WatchWindow1>
       <WatchWindow2>
@@ -307,7 +329,7 @@
       <pMultCmdsp></pMultCmdsp>
       <SystemViewers>
         <Entry>
-          <Name>System Viewer\SDIO</Name>
+          <Name>System Viewer\RTC</Name>
           <WinId>35905</WinId>
         </Entry>
       </SystemViewers>

@@ -19,6 +19,12 @@ int16_t pressure_P12;
 uint16_t flow_P13;
 uint16_t flow_P14;
 uint16_t flow_P15;
+// RTC
+#define RTC_CLOCK_SOURCE_IRC32K
+#define BKP_VALUE 0x32F1
+__IO uint32_t prescaler_a = 0, prescaler_s = 0;
+// rtc_parameter_struct rtc_initpara;
+uint32_t RTCSRC_FLAG = 0;
 
 float oxygen_voltage_air = 1.0; //! 1.0是天工大实验室的数据,项目最后需要使用FMC将校准数据存放到flash中
 
@@ -54,6 +60,7 @@ void init_454(void)
     ADC2_DMA_init_454();
     ADC2_init_454();
     SDIO_init_454();
+    RTC_init_454();
 
     delay_ms_454(2); //?初始化后的延时待定
 
@@ -93,6 +100,8 @@ void RCU_init_454(void)
     rcu_periph_clock_enable(RCU_SPI1);
     rcu_periph_clock_enable(RCU_ADC2);
     rcu_periph_clock_enable(RCU_SDIO);
+    rcu_periph_clock_enable(RCU_PMU);
+    // rcu_periph_clock_enable(RCU_RTC);
 }
 void NVIC_init_454(void)
 {
@@ -702,6 +711,52 @@ void SDIO_init_454(void)
     gpio_mode_set(GPIOD, GPIO_MODE_AF, GPIO_PUPD_PULLUP, GPIO_PIN_2);
     gpio_output_options_set(GPIOD, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_2);
 }
+void RTC_init_454(void)
+{
+    pmu_backup_write_enable();
+    // RTC 配置
+#if defined(RTC_CLOCK_SOURCE_IRC32K)
+    rcu_osci_on(RCU_IRC32K);
+    rcu_osci_stab_wait(RCU_IRC32K);
+    rcu_rtc_clock_config(RCU_RTCSRC_IRC32K);
+    prescaler_s = 0x13F;
+    prescaler_a = 0x63;
+#elif defined(RTC_CLOCK_SOURCE_LXTAL)
+    rcu_osci_on(RCU_LXTAL);
+    rcu_osci_stab_wait(RCU_LXTAL);
+    rcu_rtc_clock_config(RCU_RTCSRC_LXTAL);
+    prescaler_s = 0xFF;
+    prescaler_a = 0x7F;
+#else
+#error RTC clock source should be defined.
+#endif /* RTC_CLOCK_SOURCE_IRC32K */
+    rcu_periph_clock_enable(RCU_RTC);
+    rtc_register_sync_wait();
+    /* get RTC clock entry selection */
+    RTCSRC_FLAG = GET_BITS(RCU_BDCTL, 8, 9);
+    /* check if RTC has aready been configured */
+
+    if ((BKP_VALUE != RTC_BKP0) || (0x00 == RTCSRC_FLAG))
+    {
+        rtc_deinit();
+        RtcTimeConfig(24, 1, 1, 1, 0, 0, 00);
+        // year,month,date,week,hour,minute,second
+    }
+    else
+    {
+        /* detect the reset source */
+        if (RESET != rcu_flag_get(RCU_FLAG_PORRST))
+        {
+            printf("power on reset occurred....\n\r");
+        }
+        else if (RESET != rcu_flag_get(RCU_FLAG_EPRST))
+        {
+            printf("external reset occurred....\n\r");
+        }
+    }
+    rcu_all_reset_flag_clear();
+    rtc_timestamp_enable(RTC_TIMESTAMP_FALLING_EDGE);
+}
 
 //-----------------------------------------------------------------------
 //                       工具函数
@@ -754,7 +809,6 @@ int __backspace(FILE *f)
 {
     return '\b';
 }
-
 char *intToStr(int num)
 {
     char *start = strOutput_454;
@@ -1690,6 +1744,85 @@ void card_info_get(void)
 }
 
 //-----------------------------------------------------------------------
+//                       RTC
+//-----------------------------------------------------------------------
+void RtcTimeConfig(uint8_t year, uint8_t month, uint8_t date, uint8_t week,
+                   uint8_t hour, uint8_t minute, uint8_t second)
+{
+    rtc_parameter_struct rtc_initpara;
+    rtc_initpara.factor_asyn = prescaler_a;        // RTC异步预分频值:0x0 ~ 0x7F
+    rtc_initpara.factor_syn = prescaler_s;         // RTC同步预分频值:0x0 - 0x7FFF
+    rtc_initpara.year = DecimalToBcd(year);        // 设置年份
+    rtc_initpara.month = DecimalToBcd(month);      // 设置月份
+    rtc_initpara.date = DecimalToBcd(date);        // 设置日期
+    rtc_initpara.day_of_week = DecimalToBcd(week); // 设置星期
+    rtc_initpara.hour = DecimalToBcd(hour);        // 设置时
+    rtc_initpara.minute = DecimalToBcd(minute);    // 设置分钟
+    rtc_initpara.second = DecimalToBcd(second);    // 设置秒
+    rtc_initpara.display_format = RTC_24HOUR;      // 24小时制
+                                                   //     rtc_initpara.am_pm = RTC_PM;//午后  //12小时制才使用到
+    printf("Set time: %d-%d-%d ,%d:%d:%d\n\r",
+           BcdToDecimal(rtc_initpara.year),
+           BcdToDecimal(rtc_initpara.month),
+           BcdToDecimal(rtc_initpara.date),
+           BcdToDecimal(rtc_initpara.hour),
+           BcdToDecimal(rtc_initpara.minute),
+           BcdToDecimal(rtc_initpara.second));
+    // RTC当前时间配置
+    rtc_init(&rtc_initpara);
+    RTC_BKP0 = BKP_VALUE;
+}
+
+void rtc_show_time(void)
+{
+    rtc_parameter_struct rtc_get_time;
+    rtc_current_time_get(&rtc_get_time);
+
+    printf("Current time: %d-%d-%d ,%d:%d:%d\n\r",
+           BcdToDecimal(rtc_get_time.year),
+           BcdToDecimal(rtc_get_time.month),
+           BcdToDecimal(rtc_get_time.date),
+           BcdToDecimal(rtc_get_time.hour),
+           BcdToDecimal(rtc_get_time.minute),
+           BcdToDecimal(rtc_get_time.second));
+
+    // uint32_t time_subsecond = 0;
+    // uint8_t subsecond_ss = 0, subsecond_ts = 0, subsecond_hs = 0;
+    /* get the subsecond value of current time, and convert it into fractional format */
+    // time_subsecond = rtc_subsecond_get();
+    // subsecond_ss = (1000 - (time_subsecond * 1000 + 1000) / 400) / 100;
+    // subsecond_ts = (1000 - (time_subsecond * 1000 + 1000) / 400) % 100 / 10;
+    // subsecond_hs = (1000 - (time_subsecond * 1000 + 1000) / 400) % 10;
+}
+int BcdToDecimal(int bcd)
+{
+    int decimal = 0;
+    int temp = 1;
+    int number = 0;
+
+    while (bcd > 0)
+    {
+        number = bcd % 16;
+        decimal += number * temp;
+        temp *= 10;
+        bcd /= 16;
+    }
+    return decimal;
+}
+int DecimalToBcd(int decimal)
+{
+    int bcd = 0;
+    int temp = 1;
+
+    while (decimal > 0)
+    {
+        bcd += (decimal % 10) * temp;
+        decimal /= 10;
+        temp *= 16; // 移动到下一个BCD位置
+    }
+    return bcd;
+}
+//-----------------------------------------------------------------------
 //                       FMC
 //-----------------------------------------------------------------------
 
@@ -1774,17 +1907,18 @@ void DMA1_Channel0_IRQHandler(void)
         // 根据PSE540传感器的比例关系转换电压到物理量
         if (voltage_pse < 0.25)
         { // 对应 62.5 kPa <= p <= 887.5 kPa
-            sensor_data.pse540 = (voltage_pse + 0.25f) / 0.004f;
+            sensor_data.pse540 = 0.0f;
         }
 
-        else if (voltage_pse > 3.05)
+        else if (voltage_pse >= 3.2)
         { // 对应 p > 887.5 kPa
             sensor_data.pse540 = 887.5f;
         }
         else
         { // 对应 p < 62.5 kPa
-            sensor_data.pse540 = 0.0f;
+            sensor_data.pse540 = (voltage_pse + 0.25f) / 0.004f;
         }
+
         //! 根据氧气传感器的比例关系转换电压到氧气浓度 需要修正!
         //! oxygen_voltage_air需要变更为环境空气中的值,目前默认设置为1.0
         sensor_data.oxygen = ((oxygen_voltage - 3.3) / (oxygen_voltage_air - 3.3)) * 20.9f * 100.0f;
@@ -1833,14 +1967,22 @@ void USART0_IRQHandler(void)
     // 使用队列处理收到的数据的原因:
     // 1.噪声：串口通信可能会受到电磁干扰，导致传输的数据出现错误。
     // 2.中断或延迟：接收方可能因为某些原因（例如处理其他任务）延迟处理接收到的数据，这可能导致数据帧的一部分字节在当前缓冲区结束，而其余字节在下一个新的缓冲区开始。
-
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    // 检查是否收到数据
+    static BaseType_t xHigherPriorityTaskWoken;
+    xHigherPriorityTaskWoken = pdFALSE;
     if (usart_interrupt_flag_get(USART0, USART_INT_FLAG_RBNE) != RESET)
     {
-        // 读取数据
         uint8_t data = usart_data_receive(USART0);
-        xQueueSendFromISR(USART0_RX_xQueue, &data, &xHigherPriorityTaskWoken);
+        if (xQueueSendFromISR(USART0_RX_xQueue, &data, &xHigherPriorityTaskWoken) != pdPASS)
+        {
+            // 如果队列已满，可以在这里添加错误处理代码
+            // 例如，增加一个丢失消息的计数器或者设置一个错误标志
+        }
+        // 如果发送到队列的操作导致了一个任务的唤醒，并且该任务的优先级高于当前正在运行的任务
+        if (xHigherPriorityTaskWoken == pdTRUE)
+        {
+            // 由于在 ISR 中，我们不能直接执行任务切换，所以我们使用宏 portYIELD_FROM_ISR
+            // 来触发中断退出时的上下文切换
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
     }
-    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }

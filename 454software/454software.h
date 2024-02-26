@@ -26,10 +26,12 @@
 #include "gd32f4xx_adc.h"
 #include "gd32f4xx_sdio.h"
 #include "gd32f4xx_fmc.h"
+#include "gd32f4xx_rtc.h"
 #include "./sdcard.h"
 
 // #define BOARD_VER_1
 #define BOARD_VER_2
+#define RTC_CLOCK_SOURCE_IRC32K //! 选择RTC时钟
 
 #define ON SET
 #define OFF RESET
@@ -49,7 +51,6 @@
 #define MOTOR_FRAME_SIZE 6
 
 // 全局数据声明
-
 
 //! 最初驱动编写:
 extern volatile uint8_t MOTOR_received_frame[MOTOR_FRAME_SIZE];
@@ -108,6 +109,7 @@ void ADC2_init_454(void);
 void PWM_init_454(void);
 void PWM_IN_init_454(void);
 void SDIO_init_454(void);
+void RTC_init_454(void);
 
 // 工具函数
 void delay_ms_454(uint32_t ms);
@@ -180,7 +182,6 @@ FlagStatus Pulverizer_status_get(void);
 void motor_control(uint16_t speed);
 void motor_speed_percent(uint8_t percent);
 
-
 // 校准
 void align_data(void);
 
@@ -188,5 +189,11 @@ void align_data(void);
 void SD_init_454(void);
 sd_error_enum sd_io_init(void);
 void card_info_get(void);
+// RTC
+void RtcTimeConfig(uint8_t year, uint8_t month, uint8_t date, uint8_t week,
+                   uint8_t hour, uint8_t minute, uint8_t second);
+void rtc_show_time(void);
+int BcdToDecimal(int bcd);
+int DecimalToBcd(int decimal);
 
 #endif

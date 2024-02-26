@@ -127,10 +127,12 @@ void handleInstruction01(char *data, uint16_t length)
 // 指令02
 void handleInstruction02(char *data, uint16_t length)
 {
+    printf("handleInstruction02\n");
 }
 // 指令03
 void handleInstruction03(char *data, uint16_t length)
 {
+    printf("handleInstruction03\n");
 }
 // 指令10
 // 功能：上位机查询呼吸主控板当前通气模式及该模式下设置的调控参数信息，呼吸主控板返回通气模式及该模式下设置的调控参数信息
@@ -138,6 +140,7 @@ void handleInstruction03(char *data, uint16_t length)
 // ②主控板应答10指令，数据帧示例EB91AA0310010010
 void handleInstruction10(char *data, uint16_t length)
 {
+    printf("handleInstruction10\n");
 }
 // 指令11
 // 功能：上位机设置呼吸主控板当前通气模式及该模式的调控参数信息，呼吸主控板返回通气模式及该模式下设置的调控参数信息
@@ -145,6 +148,7 @@ void handleInstruction10(char *data, uint16_t length)
 //  ②主控板应答11指令，数据帧示例EB91AAYY11..............YYYY
 void handleInstruction11(char *data, uint16_t length)
 {
+    printf("handleInstruction11\n");
 }
 
 //! 板卡到上位机↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
